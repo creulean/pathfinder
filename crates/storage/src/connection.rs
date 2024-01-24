@@ -551,6 +551,30 @@ impl<'inner> Transaction<'inner> {
         state_update::contract_exists(self, contract_address, block_id)
     }
 
+    pub fn reverse_storage_updates(
+        &self,
+        from_block: BlockNumber,
+        to_block: BlockNumber,
+    ) -> anyhow::Result<HashMap<ContractAddress, Vec<(StorageAddress, Option<StorageValue>)>>> {
+        state_update::reverse_storage_updates(self, from_block, to_block)
+    }
+
+    pub fn reverse_nonce_updates(
+        &self,
+        from_block: BlockNumber,
+        to_block: BlockNumber,
+    ) -> anyhow::Result<Vec<(ContractAddress, Option<ContractNonce>)>> {
+        state_update::reverse_nonce_updates(self, from_block, to_block)
+    }
+
+    pub fn reverse_contract_updates(
+        &self,
+        from_block: BlockNumber,
+        to_block: BlockNumber,
+    ) -> anyhow::Result<Vec<(ContractAddress, Option<ClassHash>)>> {
+        state_update::reverse_contract_updates(self, from_block, to_block)
+    }
+
     pub fn insert_signature(
         &self,
         block_number: BlockNumber,

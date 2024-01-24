@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Context;
 use pathfinder_common::state_update::ContractClassUpdate;
 use pathfinder_common::{
@@ -438,6 +440,138 @@ pub(super) fn contract_class_hash(
     }
     .optional()
     .map_err(|e| e.into())
+}
+
+pub(super) fn reverse_storage_updates(
+    tx: &Transaction<'_>,
+    from_block: BlockNumber,
+    to_block: BlockNumber,
+) -> anyhow::Result<HashMap<ContractAddress, Vec<(StorageAddress, Option<StorageValue>)>>> {
+    let mut stmt = tx.inner().prepare(
+        r"WITH
+        updated_addresses(contract_address, storage_address) AS (
+            SELECT DISTINCT
+                contract_address, storage_address
+            FROM storage_updates
+            WHERE
+                block_number > ?2 AND block_number <= ?1
+        )
+    SELECT
+        contract_address,
+        storage_address,
+        (
+            SELECT storage_value
+            FROM storage_updates
+            WHERE
+                contract_address=updated_addresses.contract_address AND storage_address=updated_addresses.storage_address AND block_number <= ?2
+            ORDER BY block_number DESC
+            LIMIT 1
+        ) AS old_storage_value
+    FROM updated_addresses"
+    )?;
+
+    let mut rows = stmt
+        .query_map(params![&from_block, &to_block], |row| {
+            let contract_address = row.get_contract_address(0)?;
+            let storage_address = row.get_storage_address(1)?;
+            let old_storage_value = row.get_optional_storage_value(2)?;
+
+            Ok((contract_address, (storage_address, old_storage_value)))
+        })
+        .context("Querying reverse storage updates")?;
+
+    let mut storage_updates: HashMap<_, Vec<_>> = Default::default();
+
+    while let Some((contract_address, (storage_address, old_storage_value))) = rows
+        .next()
+        .transpose()
+        .context("Iterating over reverse storage updates")?
+    {
+        let entry = storage_updates.entry(contract_address).or_default();
+        entry.push((storage_address, old_storage_value));
+    }
+
+    Ok(storage_updates)
+}
+
+pub(super) fn reverse_nonce_updates(
+    tx: &Transaction<'_>,
+    from_block: BlockNumber,
+    to_block: BlockNumber,
+) -> anyhow::Result<Vec<(ContractAddress, Option<ContractNonce>)>> {
+    let mut stmt = tx.inner().prepare(
+        r"WITH
+        updated_nonces(contract_address) AS (
+            SELECT DISTINCT
+                contract_address
+            FROM nonce_updates
+            WHERE
+                block_number > ?2 AND block_number <= ?1
+        )
+    SELECT
+        contract_address,
+        (
+            SELECT nonce
+            FROM nonce_updates
+            WHERE
+                contract_address=updated_nonces.contract_address AND block_number <= ?2
+            ORDER BY block_number DESC
+            LIMIT 1
+        ) AS old_nonce
+    FROM updated_nonces",
+    )?;
+
+    let rows = stmt
+        .query_map(params![&from_block, &to_block], |row| {
+            let contract_address = row.get_contract_address(0)?;
+            let old_nonce = row.get_optional_nonce(1)?;
+
+            Ok((contract_address, old_nonce))
+        })
+        .context("Querying reverse nonce updates")?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .context("Iterating over reverse nonce updates")
+}
+
+pub(super) fn reverse_contract_updates(
+    tx: &Transaction<'_>,
+    from_block: BlockNumber,
+    to_block: BlockNumber,
+) -> anyhow::Result<Vec<(ContractAddress, Option<ClassHash>)>> {
+    let mut stmt = tx.inner().prepare(
+        r"WITH
+        updated_contracts(contract_address) AS (
+            SELECT DISTINCT
+                contract_address
+            FROM contract_updates
+            WHERE
+                block_number > ?2 AND block_number <= ?1
+        )
+    SELECT
+        contract_address,
+        (
+            SELECT class_hash
+            FROM contract_updates
+            WHERE
+                contract_address=updated_contracts.contract_address AND block_number <= ?2
+            ORDER BY block_number DESC
+            LIMIT 1
+        ) AS old_class_hash
+    FROM updated_contracts",
+    )?;
+
+    let rows = stmt
+        .query_map(params![&from_block, &to_block], |row| {
+            let contract_address = row.get_contract_address(0)?;
+            let old_class_hash = row.get_optional_class_hash(1)?;
+
+            Ok((contract_address, old_class_hash))
+        })
+        .context("Querying reverse contract updates")?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .context("Iterating over reverse contract updates")
 }
 
 #[cfg(test)]
