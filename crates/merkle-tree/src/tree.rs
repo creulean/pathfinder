@@ -839,6 +839,7 @@ mod tests {
     struct TestStorage {
         nodes: HashMap<u64, (Felt, StoredNode)>,
         leaves: HashMap<Felt, Felt>,
+        next_index: u64,
     }
 
     impl Storage for TestStorage {
@@ -871,11 +872,14 @@ mod tests {
 
         let update = tree.commit(storage).unwrap();
 
+        for idx in update.nodes_removed {
+            storage.nodes.remove(&idx);
+        }
+
         let mut indices = HashMap::new();
-        let mut idx = storage.nodes.len();
         for hash in update.nodes_added.keys() {
-            indices.insert(*hash, idx as u64);
-            idx += 1;
+            indices.insert(*hash, storage.next_index);
+            storage.next_index += 1;
         }
 
         for (hash, node) in update.nodes_added {
