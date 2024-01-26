@@ -141,6 +141,15 @@ impl InternalNode {
     pub fn is_leaf(&self) -> bool {
         matches!(self, InternalNode::Leaf)
     }
+
+    pub fn index(&self) -> Option<u64> {
+        match self {
+            InternalNode::Unresolved(index) => Some(*index),
+            InternalNode::Binary(binary) => binary.index,
+            InternalNode::Edge(edge) => edge.index,
+            InternalNode::Leaf => None,
+        }
+    }
 }
 
 impl EdgeNode {
