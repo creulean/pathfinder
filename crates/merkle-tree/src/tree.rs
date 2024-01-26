@@ -110,24 +110,35 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
     pub fn commit(self, storage: &impl Storage) -> anyhow::Result<TrieUpdate> {
         // Go through tree, collect mutated nodes and calculate their hashes.
         let mut added = HashMap::new();
+        let mut removed = HashSet::new();
 
         let root = if let Some(root) = self.root.as_ref() {
             match &mut *root.borrow_mut() {
                 InternalNode::Unresolved(idx) => {
                     let mut root = self.resolve(storage, *idx, 0).context("Resolving root")?;
-                    self.commit_subtree(&mut root, &mut added, storage, BitVec::new())?
+                    self.commit_subtree(
+                        &mut root,
+                        &mut added,
+                        &mut removed,
+                        storage,
+                        BitVec::new(),
+                    )?
                 }
-                other => self.commit_subtree(other, &mut added, storage, BitVec::new())?,
+                other => {
+                    self.commit_subtree(other, &mut added, &mut removed, storage, BitVec::new())?
+                }
             }
         } else {
             // An empty trie has a root of zero
             Felt::ZERO
         };
 
+        removed.extend(self.nodes_removed);
+
         Ok(TrieUpdate {
             root,
             nodes_added: added,
-            nodes_removed: self.nodes_removed,
+            nodes_removed: removed,
         })
     }
 
@@ -142,6 +153,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
         &self,
         node: &mut InternalNode,
         added: &mut HashMap<Felt, Node>,
+        removed: &mut HashSet<u64>,
         storage: &impl Storage,
         mut path: BitVec<u8, Msb0>,
     ) -> anyhow::Result<Felt> {
@@ -169,13 +181,19 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
             InternalNode::Binary(binary) => {
                 let mut left_path = path.clone();
                 left_path.push(Direction::Left.into());
-                let left_hash =
-                    self.commit_subtree(&mut binary.left.borrow_mut(), added, storage, left_path)?;
+                let left_hash = self.commit_subtree(
+                    &mut binary.left.borrow_mut(),
+                    added,
+                    removed,
+                    storage,
+                    left_path,
+                )?;
                 let mut right_path = path.clone();
                 right_path.push(Direction::Right.into());
                 let right_hash = self.commit_subtree(
                     &mut binary.right.borrow_mut(),
                     added,
+                    removed,
                     storage,
                     right_path,
                 )?;
@@ -202,12 +220,21 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
                 };
 
                 added.insert(hash, persisted_node);
+                if let Some(index) = binary.index {
+                    removed.insert(index);
+                };
+
                 hash
             }
             InternalNode::Edge(edge) => {
                 path.extend_from_bitslice(&edge.path);
-                let child_hash =
-                    self.commit_subtree(&mut edge.child.borrow_mut(), added, storage, path)?;
+                let child_hash = self.commit_subtree(
+                    &mut edge.child.borrow_mut(),
+                    added,
+                    removed,
+                    storage,
+                    path,
+                )?;
 
                 let hash = EdgeNode::calculate_hash::<H>(child_hash, &edge.path);
 
@@ -226,6 +253,10 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
                 };
 
                 added.insert(hash, persisted_node);
+                if let Some(index) = edge.index {
+                    removed.insert(index);
+                };
+
                 hash
             }
         };

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -423,6 +424,10 @@ impl<'inner> Transaction<'inner> {
         trie::trie_class::insert(self, root.0, nodes)
     }
 
+    pub fn remove_class_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
+        trie::trie_class::remove(self, removed)
+    }
+
     /// Stores a single contract's storage trie information.
     pub fn insert_contract_trie(
         &self,
@@ -432,6 +437,10 @@ impl<'inner> Transaction<'inner> {
         trie::trie_contracts::insert(self, root.0, nodes)
     }
 
+    pub fn remove_contract_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
+        trie::trie_contracts::remove(self, removed)
+    }
+
     /// Stores the global starknet storage trie information.
     pub fn insert_storage_trie(
         &self,
@@ -439,6 +448,10 @@ impl<'inner> Transaction<'inner> {
         nodes: &HashMap<Felt, Node>,
     ) -> anyhow::Result<u64> {
         trie::trie_storage::insert(self, root.0, nodes)
+    }
+
+    pub fn remove_storage_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
+        trie::trie_storage::remove(self, removed)
     }
 
     pub fn class_trie_node(&self, index: u64) -> anyhow::Result<Option<StoredNode>> {

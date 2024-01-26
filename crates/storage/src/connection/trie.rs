@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Context;
 use bitvec::prelude::Msb0;
@@ -146,6 +146,23 @@ mod macros {
         ($table: ident) => {
             pub(super) mod $table {
                 use super::*;
+
+                pub fn remove(tx: &Transaction<'_>, removed: &HashSet<u64>) -> anyhow::Result<()> {
+                    let mut stmt = tx
+                        .inner()
+                        .prepare_cached(concat!(
+                            "DELETE FROM ",
+                            stringify!($table),
+                            " WHERE idx = ?",
+                        ))
+                        .context("Creating delete statement")?;
+
+                    for idx in removed {
+                        stmt.execute(params![idx]).context("Deleting node")?;
+                    }
+
+                    Ok(())
+                }
 
                 /// Stores the node data for this trie and returns the index of the root.
                 pub fn insert(
