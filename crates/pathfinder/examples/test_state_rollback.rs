@@ -104,7 +104,7 @@ fn main() -> anyhow::Result<()> {
             tree.set(address, value.unwrap_or(StorageValue::ZERO))
                 .context("Updating contract state")?;
         }
-        let (root, _, _) = tree.commit().context("Committing contract state")?;
+        let (root, _) = tree.commit().context("Committing contract state")?;
 
         let nonce = match contract_update.nonce_update {
             Some(nonce) => nonce,
@@ -136,11 +136,11 @@ fn main() -> anyhow::Result<()> {
     let applied = Instant::now();
     tracing::info!("Applied reverse updates, committing global state tree");
 
-    let (global_root, _, _) = global_tree
+    let (global_root, _) = global_tree
         .commit()
         .context("Committing global state tree")?;
 
-    let (old_global_root, _, _) = old_global_tree
+    let (old_global_root, _) = old_global_tree
         .commit()
         .context("Committing old global state tree")?;
 

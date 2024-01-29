@@ -25,13 +25,12 @@ pub(crate) use reorg_counter::ReorgCounter;
 
 pub use transaction::TransactionStatus;
 
-pub use trie::{Child, Node, StoredNode};
+pub use trie::{Node, NodeRef, StoredNode, TrieUpdate};
 
 use pathfinder_common::{
-    BlockCommitmentSignature, BlockHash, BlockHeader, BlockNumber, CasmHash, ClassCommitment,
+    BlockCommitmentSignature, BlockHash, BlockHeader, BlockNumber, CasmHash,
     ClassCommitmentLeafHash, ClassHash, ContractAddress, ContractNonce, ContractRoot,
-    ContractStateHash, SierraHash, StateUpdate, StorageAddress, StorageCommitment, StorageValue,
-    TransactionHash,
+    ContractStateHash, SierraHash, StateUpdate, StorageAddress, StorageValue, TransactionHash,
 };
 use pathfinder_crypto::Felt;
 use pathfinder_ethereum::EthereumStateUpdate;
@@ -416,12 +415,8 @@ impl<'inner> Transaction<'inner> {
     }
 
     /// Stores the class trie information.
-    pub fn insert_class_trie(
-        &self,
-        root: ClassCommitment,
-        nodes: &HashMap<Felt, Node>,
-    ) -> anyhow::Result<u64> {
-        trie::trie_class::insert(self, root.0, nodes)
+    pub fn insert_class_trie(&self, update: &TrieUpdate) -> anyhow::Result<u64> {
+        trie::trie_class::insert(self, update)
     }
 
     pub fn remove_class_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
@@ -429,12 +424,8 @@ impl<'inner> Transaction<'inner> {
     }
 
     /// Stores a single contract's storage trie information.
-    pub fn insert_contract_trie(
-        &self,
-        root: ContractRoot,
-        nodes: &HashMap<Felt, Node>,
-    ) -> anyhow::Result<u64> {
-        trie::trie_contracts::insert(self, root.0, nodes)
+    pub fn insert_contract_trie(&self, update: &TrieUpdate) -> anyhow::Result<u64> {
+        trie::trie_contracts::insert(self, update)
     }
 
     pub fn remove_contract_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
@@ -442,12 +433,8 @@ impl<'inner> Transaction<'inner> {
     }
 
     /// Stores the global starknet storage trie information.
-    pub fn insert_storage_trie(
-        &self,
-        root: StorageCommitment,
-        nodes: &HashMap<Felt, Node>,
-    ) -> anyhow::Result<u64> {
-        trie::trie_storage::insert(self, root.0, nodes)
+    pub fn insert_storage_trie(&self, update: &TrieUpdate) -> anyhow::Result<u64> {
+        trie::trie_storage::insert(self, update)
     }
 
     pub fn remove_storage_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {

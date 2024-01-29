@@ -319,11 +319,8 @@ pub mod test_utils {
             .set(contract0_addr, contract_state_hash)
             .unwrap();
 
-        let (storage_commitment0, nodes_added, _nodes_removed) =
-            storage_commitment_tree.commit().unwrap();
-        let storage_root_idx = db_txn
-            .insert_storage_trie(storage_commitment0, &nodes_added)
-            .unwrap();
+        let (storage_commitment0, trie_update) = storage_commitment_tree.commit().unwrap();
+        let storage_root_idx = db_txn.insert_storage_trie(&trie_update).unwrap();
         db_txn
             .insert_storage_root(BlockNumber::GENESIS, Some(storage_root_idx))
             .unwrap();
@@ -361,11 +358,8 @@ pub mod test_utils {
         storage_commitment_tree
             .set(contract1_addr, contract_state_hash)
             .unwrap();
-        let (storage_commitment1, nodes_added, _nodes_removed) =
-            storage_commitment_tree.commit().unwrap();
-        let storage_root_idx = db_txn
-            .insert_storage_trie(storage_commitment1, &nodes_added)
-            .unwrap();
+        let (storage_commitment1, trie_update) = storage_commitment_tree.commit().unwrap();
+        let storage_root_idx = db_txn.insert_storage_trie(&trie_update).unwrap();
         db_txn
             .insert_storage_root(BlockNumber::GENESIS + 1, Some(storage_root_idx))
             .unwrap();
@@ -421,11 +415,8 @@ pub mod test_utils {
         storage_commitment_tree
             .set(contract2_addr, contract_state_hash)
             .unwrap();
-        let (storage_commitment2, nodes_added, _nodes_removed) =
-            storage_commitment_tree.commit().unwrap();
-        let storage_root_idx = db_txn
-            .insert_storage_trie(storage_commitment2, &nodes_added)
-            .unwrap();
+        let (storage_commitment2, trie_update) = storage_commitment_tree.commit().unwrap();
+        let storage_root_idx = db_txn.insert_storage_trie(&trie_update).unwrap();
         db_txn
             .insert_storage_root(BlockNumber::GENESIS + 2, Some(storage_root_idx))
             .unwrap();
