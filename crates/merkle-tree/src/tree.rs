@@ -916,11 +916,16 @@ mod tests {
         let update = tree.commit(storage).unwrap();
 
         for idx in update.nodes_removed {
+            println!("Removing {idx}: {:?}", storage.nodes[&idx]);
             storage.nodes.remove(&idx);
         }
 
         let mut indices = HashMap::new();
         for hash in update.nodes_added.keys() {
+            println!(
+                "Adding {} {hash}: {:?}",
+                storage.next_index, update.nodes_added[hash]
+            );
             indices.insert(*hash, storage.next_index);
             storage.next_index += 1;
         }
@@ -1524,6 +1529,137 @@ mod tests {
                 felt!("0x6ee9a8202b40f3f76f1a132f953faa2df78b3b33ccb2b4406431abdc99c2dfe");
 
             assert_eq!(root, expected);
+        }
+
+        #[test]
+        fn crash() {
+            let mut uut = TestTree::empty();
+            let mut storage = TestStorage::default();
+
+            macro_rules! set {
+                ($uut:expr,$address:expr,$value:expr) => {
+                    $uut.set(&storage, $address.view_bits().to_owned(), $value)
+                        .unwrap()
+                };
+            }
+
+            // set!(
+            //     uut,
+            //     felt!("0xc8e2f6f6d0d7d9222c98d375f8d0d11fb801f20a140817192930e12567bf44"),
+            //     felt!("0x88888888")
+            // );
+
+            // let root = commit_and_persist(uut, &mut storage);
+            // let mut uut = TestTree::new(root.1);
+
+            set!(
+                uut,
+                felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f66"),
+                felt!("0x15b38")
+            );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f63"),
+            //     felt!("0xb2168f01fb2694bb0ea5e60547110b1e5cfd83cd1f50f02dbc5e0287f26274")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f61"),
+            //     felt!("0x1")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f71"),
+            //     felt!("0x2b0")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f6a"),
+            //     felt!("0x7394cbe418daa16e42b87ba67372d4ab4a5df0b05c6e554d158458ce245bc10")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f62"),
+            //     felt!("0x4af4cf15c853452401ff26904a4c95a615b7d757b88e8c76dced2c954a5681f")
+            // );
+            let root = commit_and_persist(uut, &mut storage);
+            let mut uut = TestTree::new(root.1);
+            set!(
+                uut,
+                felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f64"),
+                felt!("0x15b38")
+            );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f6f"),
+            //     felt!("0x62")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x109e2bc9301871eab9d5e0f8fe5604687a1bf9e3f4e4371250fa7786ffb3b81"),
+            //     felt!("0x1")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f6d"),
+            //     felt!("0x621bb433")
+            // );
+            // set!(
+            //     uut,
+            //     felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f6b"),
+            //     felt!("0x621bb0af")
+            // );
+
+            let root = commit_and_persist(uut, &mut storage);
+            let mut uut = TestTree::new(root.1);
+
+            let mut visited = vec![];
+            let mut visitor_fn = |node: &InternalNode, path: &BitSlice<u8, Msb0>| {
+                visited.push((node.clone(), path.to_bitvec()));
+                ControlFlow::Continue::<(), Visit>(Default::default())
+            };
+            uut.dfs(&storage, &mut visitor_fn).unwrap();
+
+            println!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+
+            set!(
+                uut,
+                felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f66"),
+                felt!("0xf502")
+            );
+            //            set!(
+            //                uut,
+            //                felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f68"),
+            //                felt!("0x6636")
+            //           );
+
+            let root = commit_and_persist(uut, &mut storage);
+            let mut uut = TestTree::new(root.1);
+
+            let mut visited = vec![];
+            let mut visitor_fn = |node: &InternalNode, path: &BitSlice<u8, Msb0>| {
+                visited.push((node.clone(), path.to_bitvec()));
+                ControlFlow::Continue::<(), Visit>(Default::default())
+            };
+            uut.dfs(&storage, &mut visitor_fn).unwrap();
+
+            set!(
+                uut,
+                felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f66"),
+                felt!("0xd59e")
+            );
+            set!(
+                uut,
+                felt!("0x5c5e36947656f78c487b42ca69d96e79c01eac62f50d996f3972c9851bd5f68"),
+                felt!("0x859a")
+            );
+
+            let mut visited = vec![];
+            let mut visitor_fn = |node: &InternalNode, path: &BitSlice<u8, Msb0>| {
+                visited.push((node.clone(), path.to_bitvec()));
+                ControlFlow::Continue::<(), Visit>(Default::default())
+            };
+            uut.dfs(&storage, &mut visitor_fn).unwrap();
         }
     }
 
