@@ -22,7 +22,6 @@ use tokio::sync::mpsc;
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Timings {
     pub block_download: Duration,
-    pub state_diff_download: Duration,
     pub class_declaration: Duration,
     pub signature_download: Duration,
 }
@@ -117,7 +116,7 @@ where
 
         let mut pending_handle = None;
 
-        let (block, commitments) = loop {
+        let (block, commitments, state_update) = loop {
             match download_block(
                 next,
                 chain,
@@ -128,7 +127,9 @@ where
             )
             .await?
             {
-                DownloadBlock::Block(block, commitments) => break (block, commitments),
+                DownloadBlock::Block(block, commitments, state_update) => {
+                    break (block, commitments, state_update)
+                }
                 DownloadBlock::AtHead => {
                     const PENDING_POLL_INTERVAL: std::time::Duration =
                         std::time::Duration::from_secs(2);
@@ -211,29 +212,6 @@ where
             }
         }
 
-        // Unwrap in both block and state update is safe as the block hash always exists (unless we query for pending).
-        let block_hash = block.block_hash;
-        let t_update = std::time::Instant::now();
-
-        let state_update = sequencer
-            .state_update(block_hash.into())
-            .await
-            .with_context(|| format!("Fetch state diff for block {next:?} from sequencer"))?;
-
-        anyhow::ensure!(
-            state_update.block_hash != BlockHash::ZERO,
-            "Gateway returned `pending` state update"
-        );
-
-        // An extra sanity check for the state update API.
-        anyhow::ensure!(
-            block_hash == state_update.block_hash,
-            "State update block hash mismatch, actual {:x}, expected {:x}",
-            block_hash.0,
-            state_update.block_hash.0
-        );
-        let t_update = t_update.elapsed();
-
         // Download and emit newly declared classes.
         let t_declare = std::time::Instant::now();
         download_new_classes(
@@ -249,26 +227,25 @@ where
 
         let t_signature = std::time::Instant::now();
         let signature = sequencer
-            .signature(block_hash.into())
+            .signature(block.block_hash.into())
             .await
             .with_context(|| format!("Fetch signature for block {next:?} from sequencer"))?;
         let t_signature = t_signature.elapsed();
 
         // An extra sanity check for the signature API.
         anyhow::ensure!(
-            block_hash == signature.signature_input.block_hash,
+            block.block_hash == signature.signature_input.block_hash,
             "Signature block hash mismatch, actual {:x}, expected {:x}",
             signature.signature_input.block_hash.0,
-            block_hash.0,
+            block.block_hash.0,
         );
         let signature = signature.into();
 
-        head = Some((next, block_hash, state_update.state_commitment));
-        blocks.push(next, block_hash, state_update.state_commitment);
+        head = Some((next, block.block_hash, state_update.state_commitment));
+        blocks.push(next, block.block_hash, state_update.state_commitment);
 
         let timings = Timings {
             block_download: t_block,
-            state_diff_download: t_update,
             class_declaration: t_declare,
             signature_download: t_signature,
         };
@@ -276,7 +253,7 @@ where
         tx_event
             .send(SyncEvent::Block(
                 (block, commitments),
-                Box::new(state_update),
+                state_update,
                 Box::new(signature),
                 timings,
             ))
@@ -407,7 +384,11 @@ pub async fn download_new_classes(
 }
 
 enum DownloadBlock {
-    Block(Box<Block>, (TransactionCommitment, EventCommitment)),
+    Block(
+        Box<Block>,
+        (TransactionCommitment, EventCommitment),
+        Box<StateUpdate>,
+    ),
     AtHead,
     Reorg,
 }
@@ -433,12 +414,13 @@ async fn download_block(
         error::KnownStarknetErrorCode::BlockNotFound, reply::MaybePendingBlock,
     };
 
-    // TODO: merge block and state update call.
-    let result = sequencer.block(block_number.into()).await;
+    let result = sequencer.state_update_with_block(block_number.into()).await;
 
     let result = match result {
-        Ok(MaybePendingBlock::Block(block)) => {
+        Ok((MaybePendingBlock::Block(block), state_update)) => {
             let block = Box::new(block);
+            let state_update = Box::new(state_update);
+
             // Check if block hash is correct.
             let verify_hash = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
                 let block_number = block.block_number;
@@ -458,15 +440,23 @@ async fn download_block(
                     Status::AcceptedOnL1 | Status::AcceptedOnL2,
                     VerifyResult::Match(commitments),
                     _,
-                ) => Ok(DownloadBlock::Block(block, commitments)),
+                ) => Ok(DownloadBlock::Block(block, commitments, state_update)),
                 (Status::AcceptedOnL1 | Status::AcceptedOnL2, VerifyResult::NotVerifiable, _) => {
-                    Ok(DownloadBlock::Block(block, Default::default()))
+                    Ok(DownloadBlock::Block(
+                        block,
+                        Default::default(),
+                        state_update,
+                    ))
                 }
                 (
                     Status::AcceptedOnL1 | Status::AcceptedOnL2,
                     VerifyResult::Mismatch,
                     BlockValidationMode::AllowMismatch,
-                ) => Ok(DownloadBlock::Block(block, Default::default())),
+                ) => Ok(DownloadBlock::Block(
+                    block,
+                    Default::default(),
+                    state_update,
+                )),
                 (_, VerifyResult::Mismatch, BlockValidationMode::Strict) => {
                     Err(anyhow!("Block hash mismatch"))
                 }
@@ -476,7 +466,9 @@ async fn download_block(
                 )),
             }
         }
-        Ok(MaybePendingBlock::Pending(_)) => anyhow::bail!("Sequencer returned `pending` block"),
+        Ok((MaybePendingBlock::Pending(_), _)) => {
+            anyhow::bail!("Sequencer returned `pending` block")
+        }
         Err(SequencerError::StarknetError(err)) if err.code == BlockNotFound.into() => {
             // This would occur if we queried past the head of the chain. We now need to check that
             // a reorg hasn't put us too far in the future. This does run into race conditions with
@@ -508,7 +500,7 @@ async fn download_block(
     };
 
     match result {
-        Ok(DownloadBlock::Block(block, commitments)) => {
+        Ok(DownloadBlock::Block(block, commitments, state_update)) => {
             use rayon::prelude::*;
 
             let (send, recv) = tokio::sync::oneshot::channel();
@@ -530,7 +522,7 @@ async fn download_block(
 
             let block = recv.await.expect("Panic on rayon thread")?;
 
-            Ok(DownloadBlock::Block(block, commitments))
+            Ok(DownloadBlock::Block(block, commitments, state_update))
         }
         Ok(DownloadBlock::AtHead | DownloadBlock::Reorg) | Err(_) => result,
     }
@@ -570,7 +562,7 @@ async fn reorg(
         .await
         .with_context(|| format!("Download block {previous_block_number} from sequencer"))?
         {
-            DownloadBlock::Block(block, _) if block.block_hash == previous.0 => {
+            DownloadBlock::Block(block, _, _) if block.block_hash == previous.0 => {
                 break Some((previous_block_number, previous.0, previous.1));
             }
             _ => {}
