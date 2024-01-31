@@ -99,7 +99,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
     pub fn commit(self, storage: &impl Storage) -> anyhow::Result<TrieUpdate> {
         // Go through tree, collect mutated nodes and calculate their hashes.
         let mut added = Vec::new();
-        let mut removed = HashSet::new();
+        let mut removed = Vec::new();
 
         let (_root_hash, _root_ref) = if let Some(root) = self.root.as_ref() {
             match &mut *root.borrow_mut() {
@@ -141,7 +141,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
         &self,
         node: &mut InternalNode,
         added: &mut Vec<(Felt, Node)>,
-        removed: &mut HashSet<u64>,
+        removed: &mut Vec<u64>,
         storage: &impl Storage,
         mut path: BitVec<u8, Msb0>,
     ) -> anyhow::Result<(Felt, Option<NodeRef>)> {
@@ -196,7 +196,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
                 };
 
                 if let Some(index) = binary.index {
-                    removed.insert(index);
+                    removed.push(index);
                 };
 
                 let node_index = added.len();
@@ -229,7 +229,7 @@ impl<H: FeltHash, const HEIGHT: usize> MerkleTree<H, HEIGHT> {
                 let node_index = added.len();
                 added.push((hash, persisted_node));
                 if let Some(index) = edge.index {
-                    removed.insert(index);
+                    removed.push(index);
                 };
 
                 (hash, Some(NodeRef::Index(node_index)))

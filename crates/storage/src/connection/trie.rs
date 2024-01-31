@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::Context;
 use bitvec::prelude::Msb0;
@@ -147,7 +147,7 @@ mod macros {
             pub(super) mod $table {
                 use super::*;
 
-                pub fn remove(tx: &Transaction<'_>, removed: &HashSet<u64>) -> anyhow::Result<()> {
+                pub fn remove(tx: &Transaction<'_>, removed: &[u64]) -> anyhow::Result<()> {
                     let mut stmt = tx
                         .inner()
                         .prepare_cached(concat!(
@@ -297,7 +297,7 @@ pub struct TrieUpdate {
     /// The last node is the root of the trie.
     pub nodes_added: Vec<(Felt, Node)>,
     // Nodes committed to storage that have been removed.
-    pub nodes_removed: HashSet<u64>,
+    pub nodes_removed: Vec<u64>,
 }
 
 impl TrieUpdate {
@@ -730,7 +730,7 @@ mod tests {
                             right: NodeRef::Index(7),
                         },
                     )],
-                    nodes_removed: HashSet::new(),
+                    nodes_removed: Default::default(),
                 };
 
                 test_table::insert(&tx, &update).unwrap_err();
@@ -856,9 +856,9 @@ mod tests {
         }
 
         #[test]
-        fn index_children() {
-            // Insert nodes which use indices as children instead of hashes.
-            // The indices don't actually need to point to real nodes since this
+        fn id_children() {
+            // Insert nodes which use ids as children instead of indexes.
+            // The ids don't actually need to point to real nodes since this
             // isn't enforced within the db.
             let mut db = setup_db();
             let tx = db.transaction().unwrap();

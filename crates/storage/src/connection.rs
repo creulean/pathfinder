@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -419,7 +418,7 @@ impl<'inner> Transaction<'inner> {
         trie::trie_class::insert(self, update)
     }
 
-    pub fn remove_class_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
+    pub fn remove_class_trie(&self, removed: &[u64]) -> anyhow::Result<()> {
         trie::trie_class::remove(self, removed)
     }
 
@@ -428,7 +427,7 @@ impl<'inner> Transaction<'inner> {
         trie::trie_contracts::insert(self, update)
     }
 
-    pub fn remove_contract_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
+    pub fn remove_contract_trie(&self, removed: &[u64]) -> anyhow::Result<()> {
         trie::trie_contracts::remove(self, removed)
     }
 
@@ -437,7 +436,7 @@ impl<'inner> Transaction<'inner> {
         trie::trie_storage::insert(self, update)
     }
 
-    pub fn remove_storage_trie(&self, removed: &HashSet<u64>) -> anyhow::Result<()> {
+    pub fn remove_storage_trie(&self, removed: &[u64]) -> anyhow::Result<()> {
         trie::trie_storage::remove(self, removed)
     }
 
