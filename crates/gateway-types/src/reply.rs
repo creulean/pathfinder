@@ -266,6 +266,16 @@ pub mod transaction {
         pub n_memory_holes: u64,
     }
 
+    impl From<ExecutionResources> for pathfinder_common::receipt::ExecutionResources {
+        fn from(value: ExecutionResources) -> Self {
+            Self {
+                builtin_instance_counter: value.builtin_instance_counter.into(),
+                n_steps: value.n_steps,
+                n_memory_holes: value.n_memory_holes,
+            }
+        }
+    }
+
     impl<T> Dummy<T> for ExecutionResources {
         fn dummy_with_rng<R: rand::Rng + ?Sized>(_: &T, rng: &mut R) -> Self {
             Self {
@@ -291,6 +301,34 @@ pub mod transaction {
         pub keccak_builtin: u64,
         pub poseidon_builtin: u64,
         pub segment_arena_builtin: u64,
+    }
+
+    impl From<BuiltinCounters> for pathfinder_common::receipt::BuiltinCounters {
+        fn from(value: BuiltinCounters) -> Self {
+            // Use deconstruction to ensure these structs remain in-sync.
+            let BuiltinCounters {
+                output_builtin,
+                pedersen_builtin,
+                range_check_builtin,
+                ecdsa_builtin,
+                bitwise_builtin,
+                ec_op_builtin,
+                keccak_builtin,
+                poseidon_builtin,
+                segment_arena_builtin,
+            } = value;
+            Self {
+                output_builtin,
+                pedersen_builtin,
+                range_check_builtin,
+                ecdsa_builtin,
+                bitwise_builtin,
+                ec_op_builtin,
+                keccak_builtin,
+                poseidon_builtin,
+                segment_arena_builtin,
+            }
+        }
     }
 
     impl<T> Dummy<T> for BuiltinCounters {
@@ -324,6 +362,25 @@ pub mod transaction {
         pub nonce: Option<L1ToL2MessageNonce>,
     }
 
+    impl From<L1ToL2Message> for pathfinder_common::receipt::L1ToL2Message {
+        fn from(value: L1ToL2Message) -> Self {
+            let L1ToL2Message {
+                from_address,
+                payload,
+                selector,
+                to_address,
+                nonce,
+            } = value;
+            pathfinder_common::receipt::L1ToL2Message {
+                from_address,
+                payload,
+                selector,
+                to_address,
+                nonce,
+            }
+        }
+    }
+
     impl<T> Dummy<T> for L1ToL2Message {
         fn dummy_with_rng<R: rand::Rng + ?Sized>(_: &T, rng: &mut R) -> Self {
             // Nonces were missing in very old messages, we don't care about it
@@ -347,6 +404,21 @@ pub mod transaction {
         pub payload: Vec<L2ToL1MessagePayloadElem>,
         #[serde_as(as = "EthereumAddressAsHexStr")]
         pub to_address: EthereumAddress,
+    }
+
+    impl From<L2ToL1Message> for pathfinder_common::receipt::L2ToL1Message {
+        fn from(value: L2ToL1Message) -> Self {
+            let L2ToL1Message {
+                from_address,
+                payload,
+                to_address,
+            } = value;
+            pathfinder_common::receipt::L2ToL1Message {
+                from_address,
+                payload,
+                to_address,
+            }
+        }
     }
 
     #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq, Dummy)]
@@ -379,6 +451,40 @@ pub mod transaction {
         /// Only present if status is [ExecutionStatus::Reverted].
         #[serde(default)]
         pub revert_error: Option<String>,
+    }
+
+    impl From<Receipt> for pathfinder_common::receipt::Receipt {
+        fn from(value: Receipt) -> Self {
+            use pathfinder_common::receipt as common;
+
+            let Receipt {
+                actual_fee,
+                events,
+                execution_resources,
+                l1_to_l2_consumed_message,
+                l2_to_l1_messages,
+                transaction_hash,
+                transaction_index,
+                execution_status,
+                revert_error,
+            } = value;
+
+            common::Receipt {
+                actual_fee,
+                events,
+                execution_resources: execution_resources.map(Into::into),
+                l1_to_l2_consumed_message: l1_to_l2_consumed_message.map(Into::into),
+                l2_to_l1_messages: l2_to_l1_messages.into_iter().map(Into::into).collect(),
+                transaction_hash,
+                transaction_index,
+                execution_status: match execution_status {
+                    ExecutionStatus::Succeeded => common::ExecutionStatus::Succeeded,
+                    ExecutionStatus::Reverted => common::ExecutionStatus::Reverted {
+                        reason: revert_error.unwrap_or_default(),
+                    },
+                },
+            }
+        }
     }
 
     impl<T> Dummy<T> for Receipt {
