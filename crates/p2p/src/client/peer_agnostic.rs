@@ -9,10 +9,12 @@ use std::{
 use anyhow::Context;
 use futures::{channel::mpsc, StreamExt};
 use libp2p::PeerId;
-use p2p_proto::block::{BlockBodiesRequest, BlockHeadersRequest, BlockHeadersResponse};
+use p2p_proto::class::{Class, ClassesRequest};
 use p2p_proto::common::{Direction, Iteration};
 use p2p_proto::event::EventsRequest;
+use p2p_proto::header::{BlockHeadersRequest, BlockHeadersResponse};
 use p2p_proto::receipt::{Receipt, ReceiptsRequest};
+use p2p_proto::state::StateDiffsRequest;
 use p2p_proto::transaction::TransactionsRequest;
 use pathfinder_common::{
     event::Event,
@@ -84,7 +86,7 @@ impl Client {
         self.inner
             .publish(
                 &self.block_propagation_topic,
-                p2p_proto::block::NewBlock::Id(block_id),
+                p2p_proto::header::NewBlock::Id(block_id),
             )
             .await
     }
@@ -191,6 +193,8 @@ impl Client {
                         yield PeerData::new(peer, signed_header);
                     }
 
+                    yield PeerData::new(PeerId::, Default::default());
+
                     // TODO: track how much and how fast this peer responded with i.e. don't let them drip feed us etc.
                 }
             }
@@ -256,6 +260,14 @@ impl Client {
         }
 
         anyhow::bail!("No valid responses to headers request: start {start_block}, n {num_blocks}")
+    }
+
+    pub async fn classes(
+        &self,
+        start_block: BlockNumber,
+        num_blocks: usize,
+    ) -> anyhow::Result<Vec<Class>> {
+        todo!()
     }
 
     /// Including new class definitions
