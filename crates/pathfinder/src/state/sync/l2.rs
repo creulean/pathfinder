@@ -1011,6 +1011,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 // Download the genesis block with respective state update and contracts
                 expect_state_update_with_block(
@@ -1027,8 +1028,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE.clone()),
                 );
                 // Download block #1 with respective state update and contracts
@@ -1046,14 +1047,20 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE.clone()),
                 );
                 // Stay at head, no more blocks available
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK2_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK2_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1092,6 +1099,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 // Start with downloading block #1
                 expect_state_update_with_block(
@@ -1108,8 +1116,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE.clone()),
                 );
 
@@ -1117,6 +1125,12 @@ mod tests {
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK2_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK2_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1167,6 +1181,7 @@ mod tests {
                 let (tx_event, _rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 // Block with a non-accepted status
                 let mut block = BLOCK0.clone();
@@ -1176,6 +1191,12 @@ mod tests {
                     &mut seq,
                     BLOCK0_NUMBER.into(),
                     Ok((block.into(), STATE_UPDATE0.clone())),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
+                    Ok(BLOCK0_SIGNATURE.clone()),
                 );
 
                 let jh = spawn_sync_default(tx_event, mock);
@@ -1204,6 +1225,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 // Fetch the genesis block with respective state update and contracts
                 expect_state_update_with_block(
@@ -1220,8 +1242,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE.clone()),
                 );
 
@@ -1229,6 +1251,12 @@ mod tests {
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK1_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK1_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1258,8 +1286,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE_V2.clone()),
                 );
 
@@ -1267,6 +1295,12 @@ mod tests {
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK1_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK1_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1317,6 +1351,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 let block1_v2 = reply::Block {
                     block_hash: BLOCK1_HASH_V2,
@@ -1350,8 +1385,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE.clone()),
                 );
                 // Fetch block #1 with respective state update and contracts
@@ -1369,8 +1404,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE.clone()),
                 );
                 // Fetch block #2 with respective state update and contracts
@@ -1382,14 +1417,20 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK2_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
                     Ok(BLOCK2_SIGNATURE.clone()),
                 );
                 // Block #3 is not there
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK3_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK3_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1434,8 +1475,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE_V2.clone()),
                 );
                 // Fetch the new block #1 from the fork with respective state update and contracts
@@ -1447,8 +1488,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE_V2.clone()),
                 );
 
@@ -1457,6 +1498,12 @@ mod tests {
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK2_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK2_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1522,6 +1569,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 let block1_v2 = reply::Block {
                     block_hash: BLOCK1_HASH_V2,
@@ -1587,8 +1635,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE.clone()),
                 );
                 // Fetch block #1 with respective state update and contracts
@@ -1606,8 +1654,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE.clone()),
                 );
                 // Fetch block #2 with respective state update and contracts
@@ -1619,8 +1667,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK2_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
                     Ok(BLOCK2_SIGNATURE.clone()),
                 );
                 // Fetch block #3 with respective state update and contracts
@@ -1632,14 +1680,20 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK3_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK3_NUMBER.into(),
                     Ok(BLOCK3_SIGNATURE.clone()),
                 );
                 // Block #4 is not there
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK4_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK4_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1683,8 +1737,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE_V2.clone()),
                 );
                 // Fetch the new block #2 from the fork with respective state update
@@ -1696,14 +1750,20 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK2_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
                     Ok(BLOCK2_SIGNATURE_V2.clone()),
                 );
                 // Indicate that we are still staying at the head - no new blocks and the latest block matches our head
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK3_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK3_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1769,6 +1829,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 let block2_v2 = reply::Block {
                     block_hash: BLOCK2_HASH_V2,
@@ -1802,8 +1863,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE.clone()),
                 );
                 // Fetch block #1 with respective state update and contracts
@@ -1821,8 +1882,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE.clone()),
                 );
                 // Fetch block #2 with respective state update and contracts
@@ -1834,14 +1895,20 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK2_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
                     Ok(BLOCK2_SIGNATURE.clone()),
                 );
                 // Block #3 is not there
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK3_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK3_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1873,8 +1940,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK2_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
                     Ok(BLOCK2_SIGNATURE_V2.clone()),
                 );
 
@@ -1882,6 +1949,12 @@ mod tests {
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK3_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK3_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -1937,6 +2010,7 @@ mod tests {
                 let (tx_event, mut rx_event) = tokio::sync::mpsc::channel(1);
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 let block1_v2 = reply::Block {
                     block_hash: BLOCK1_HASH_V2,
@@ -1986,8 +2060,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK0_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
                     Ok(BLOCK0_SIGNATURE.clone()),
                 );
 
@@ -2006,8 +2080,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE.clone()),
                 );
                 // Fetch block #2 whose parent hash does not match block #1 hash
@@ -2016,6 +2090,12 @@ mod tests {
                     &mut seq,
                     BLOCK2_NUMBER.into(),
                     Ok((block2.clone().into(), STATE_UPDATE2.clone())),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
+                    Ok(BLOCK2_SIGNATURE.clone()),
                 );
 
                 // L2 sync task goes back block by block to find where the block hash matches the DB
@@ -2037,8 +2117,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK1_HASH_V2.into(),
+                    &mut signature_seq,
+                    BLOCK1_NUMBER.into(),
                     Ok(BLOCK1_SIGNATURE_V2.clone()),
                 );
                 // Fetch the block #2 again, now with respective state update
@@ -2050,8 +2130,8 @@ mod tests {
                 );
                 expect_signature(
                     &mut mock,
-                    &mut seq,
-                    BLOCK2_HASH.into(),
+                    &mut signature_seq,
+                    BLOCK2_NUMBER.into(),
                     Ok(BLOCK2_SIGNATURE.clone()),
                 );
 
@@ -2059,6 +2139,12 @@ mod tests {
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
+                    BLOCK3_NUMBER.into(),
+                    Err(block_not_found()),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
                     BLOCK3_NUMBER.into(),
                     Err(block_not_found()),
                 );
@@ -2110,12 +2196,19 @@ mod tests {
 
                 let mut mock = MockGatewayApi::new();
                 let mut seq = mockall::Sequence::new();
+                let mut signature_seq = mockall::Sequence::new();
 
                 expect_state_update_with_block(
                     &mut mock,
                     &mut seq,
                     BLOCK0_NUMBER.into(),
                     Ok((BLOCK0.clone().into(), STATE_UPDATE0.clone())),
+                );
+                expect_signature(
+                    &mut mock,
+                    &mut signature_seq,
+                    BLOCK0_NUMBER.into(),
+                    Ok(BLOCK0_SIGNATURE.clone()),
                 );
                 expect_class_by_hash(
                     &mut mock,
