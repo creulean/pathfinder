@@ -1,5 +1,4 @@
 use anyhow::Context;
-use p2p_proto::{block::BlockHeadersResponsePart, common::ConsensusSignature};
 use pathfinder_common::{
     BlockCommitmentSignature, BlockCommitmentSignatureElem, SignedBlockHeader,
 };
@@ -8,7 +7,6 @@ use crate::client::types::TryFromDto;
 
 pub(crate) trait ParserState {
     type Dto;
-    type Inner;
     type Out;
 
     fn advance(&mut self, item: Self::Dto) -> anyhow::Result<()>
@@ -31,8 +29,6 @@ pub(crate) trait ParserState {
     where
         Self: Sized;
 
-    fn from_inner(inner: Self::Inner) -> Self::Out;
-
     fn take_parsed(self) -> Option<Self::Out>;
 
     fn should_stop(&self) -> bool;
@@ -42,164 +38,139 @@ macro_rules! impl_take_parsed_and_should_stop {
     ($inner_collection: ident) => {
         fn take_parsed(self) -> Option<<Self as super::ParserState>::Out> {
             match self {
-                Self::Delimited { $inner_collection }
-                | Self::DelimitedWithError {
-                    $inner_collection, ..
-                } => {
-                    debug_assert!(!$inner_collection.is_empty());
-                    Some(Self::from_inner($inner_collection))
-                }
+                Self::Delimited { $inner_collection } => Some($inner_collection),
                 _ => None,
             }
         }
 
         fn should_stop(&self) -> bool {
-            matches!(self, Self::Empty { .. } | Self::DelimitedWithError { .. })
+            matches!(self, Self::Empty { .. })
         }
     };
 }
 
-pub(crate) mod block_header {
-    use crate::client::types::{BlockHeader, MaybeSignedBlockHeader};
+// Important!
+// This parser is going to be removed anyway soon so:
+// - we're not using a dedicated struct,
+// - block hash is zero and needs to be computed later on,
+// - we're not checking if block numbers follow what is specified in the request.
+pub(crate) mod header {
     use anyhow::Context;
-    use p2p_proto::block::BlockHeadersResponsePart;
-    use p2p_proto::common::{Error, Fin};
-    use pathfinder_common::{
-        signature::BlockCommitmentSignature, BlockCommitmentSignatureElem, BlockHash,
-    };
-    use std::collections::HashMap;
+    use p2p_proto::header::BlockHeadersResponse;
+    use pathfinder_common::SignedBlockHeader;
 
     #[derive(Debug, Default)]
     pub enum State {
         #[default]
         Uninitialized,
         Header {
-            current: BlockHash,
-            headers: HashMap<BlockHash, MaybeSignedBlockHeader>,
-        },
-        Signatures {
-            headers: HashMap<BlockHash, MaybeSignedBlockHeader>,
+            headers: Vec<SignedBlockHeader>,
         },
         Delimited {
-            headers: HashMap<BlockHash, MaybeSignedBlockHeader>,
+            headers: Vec<SignedBlockHeader>,
         },
-        DelimitedWithError {
-            error: Error,
-            headers: HashMap<BlockHash, MaybeSignedBlockHeader>,
-        },
-        Empty {
-            error: Option<Error>,
-        },
+        Empty,
     }
 
     impl super::ParserState for State {
-        type Dto = BlockHeadersResponsePart;
-        type Inner = HashMap<BlockHash, MaybeSignedBlockHeader>;
-        type Out = Vec<MaybeSignedBlockHeader>;
+        type Dto = p2p_proto::header::BlockHeadersResponse;
+        type Out = Vec<SignedBlockHeader>;
 
         fn transition(self, next: Self::Dto) -> anyhow::Result<Self> {
             Ok(match (self, next) {
-                (State::Uninitialized, BlockHeadersResponsePart::Header(header)) => {
-                    let header = BlockHeader::try_from(*header).context("parsing header")?;
+                (State::Uninitialized, BlockHeadersResponse::Header(header)) => {
+                    let header =
+                        SignedBlockHeader::try_from_dto(*header).context("parsing header")?;
                     Self::Header {
-                        current: header.hash,
-                        headers: [(header.hash, header.into())].into(),
+                        headers: vec![header],
                     }
                 }
-                (State::Uninitialized, BlockHeadersResponsePart::Fin(Fin { error })) => {
-                    Self::Empty { error }
+                (State::Uninitialized, BlockHeadersResponse::Fin) => Self::Empty,
+                (State::Header { mut headers }, BlockHeadersResponse::Header(header)) => {
+                    let header =
+                        SignedBlockHeader::try_from_dto(*header).context("parsing header")?;
+                    headers.push(header);
+                    Self::Header { headers }
                 }
-                (
-                    State::Header {
-                        current,
-                        mut headers,
-                    },
-                    BlockHeadersResponsePart::Signatures(signatures),
-                ) => {
-                    if current != BlockHash(signatures.block.hash.0) {
-                        anyhow::bail!("unexpected part");
-                    }
-
-                    headers
-                        .get_mut(&current)
-                        .expect("header for this hash is present")
-                        .signatures
-                        .extend(signatures.signatures.into_iter().map(|signature| {
-                            BlockCommitmentSignature {
-                                r: BlockCommitmentSignatureElem(signature.r),
-                                s: BlockCommitmentSignatureElem(signature.s),
-                            }
-                        }));
-                    Self::Signatures { headers }
+                (State::Header { headers }, BlockHeadersResponse::Fin) => {
+                    Self::Delimited { headers }
                 }
-                (
-                    State::Header { headers, .. } | State::Signatures { headers },
-                    BlockHeadersResponsePart::Fin(Fin { error }),
-                ) => match error {
-                    Some(error) => State::DelimitedWithError { error, headers },
-                    None => State::Delimited { headers },
-                },
-                (State::Delimited { mut headers }, BlockHeadersResponsePart::Header(header)) => {
-                    if headers.contains_key(&BlockHash(header.hash.0)) {
-                        anyhow::bail!("unexpected part");
-                    }
-
-                    let current = BlockHash(header.hash.0);
-                    let header = BlockHeader::try_from(*header).context("parsing header")?;
-                    headers.insert(header.hash, header.into());
-                    Self::Header { current, headers }
-                }
-                (_, _) => anyhow::bail!("unexpected part"),
+                (_, _) => anyhow::bail!("unexpected message"),
             })
-        }
-
-        fn from_inner(inner: Self::Inner) -> Self::Out {
-            inner.into_values().collect()
         }
 
         impl_take_parsed_and_should_stop!(headers);
     }
 }
 
-pub(crate) mod state_update {
-    use crate::client::types::{StateUpdate, StateUpdateWithDefinitions};
-    use p2p_proto::{
-        block::{BlockBodiesResponse, BlockBodyMessage},
-        common::{BlockId, Error, Fin},
-        state::{Class, Classes},
-    };
-    use pathfinder_common::BlockHash;
-    use std::collections::HashMap;
+// Important!
+// This parser is going to be removed anyway soon so:
+// - we're not checking if block numbers follow what is specified in the request.
+pub(crate) mod class {
+    use p2p_proto::class::{Class, ClassesResponse};
 
     #[derive(Debug, Default)]
     pub enum State {
         #[default]
         Uninitialized,
-        Diff {
-            last_id: BlockId,
-            state_updates: HashMap<BlockId, (StateUpdate, Vec<Class>)>,
+        Class {
+            classes: Vec<Class>,
         },
-        Classes {
-            last_id: BlockId,
-            state_updates: HashMap<BlockId, (StateUpdate, Vec<Class>)>,
-        },
-        _Proof, // TODO add proof support
         Delimited {
-            state_updates: HashMap<BlockId, (StateUpdate, Vec<Class>)>,
+            classes: Vec<Class>,
         },
-        DelimitedWithError {
-            error: Error,
-            state_updates: HashMap<BlockId, (StateUpdate, Vec<Class>)>,
-        },
-        Empty {
-            error: Option<Error>,
-        },
+        Empty,
     }
 
     impl super::ParserState for State {
-        type Dto = BlockBodiesResponse;
-        type Inner = HashMap<BlockId, (StateUpdate, Vec<Class>)>;
-        type Out = Vec<StateUpdateWithDefinitions>;
+        type Dto = ClassesResponse;
+        type Out = Vec<Class>;
+
+        fn transition(self, next: Self::Dto) -> anyhow::Result<Self> {
+            Ok(match (self, next) {
+                (State::Uninitialized, ClassesResponse::Class(class)) => Self::Class {
+                    classes: vec![class],
+                },
+                (State::Uninitialized, ClassesResponse::Fin) => Self::Empty,
+                (State::Class { mut classes }, ClassesResponse::Class(class)) => {
+                    classes.push(class);
+                    Self::Class { classes }
+                }
+                (State::Class { classes }, ClassesResponse::Fin) => Self::Delimited { classes },
+                (_, _) => anyhow::bail!("unexpected message"),
+            })
+        }
+
+        impl_take_parsed_and_should_stop!(classes);
+    }
+}
+
+// Important!
+// This parser is going to be removed anyway soon so:
+// - we're not checking if block numbers follow what is specified in the request.
+pub(crate) mod state_update {
+    use anyhow::Context;
+    use p2p_proto::state::{ContractDiff, StateDiffsResponse};
+    use pathfinder_common::{ClassHash, StateUpdate};
+
+    #[derive(Debug, Default)]
+    pub enum State {
+        #[default]
+        Uninitialized,
+        StateDiff {
+            contract_diffs: Vec<ContractDiff>,
+            replaced: Vec<ClassHash>,
+            deployed: Vec<ClassHash>,
+        },
+        Delimited {
+            all: (Vec<ContractDiff>, Vec<ClassHash>, Vec<ClassHash>),
+        },
+        Empty,
+    }
+
+    impl super::ParserState for State {
+        type Dto = StateDiffsResponse;
+        type Out = (Vec<ContractDiff>, Vec<ClassHash>, Vec<ClassHash>);
 
         fn transition(self, item: Self::Dto) -> anyhow::Result<Self> {
             let BlockBodiesResponse { id, body_message } = item;
@@ -274,18 +245,7 @@ pub(crate) mod state_update {
             })
         }
 
-        fn from_inner(inner: Self::Inner) -> Self::Out {
-            inner
-                .into_iter()
-                .map(|(k, v)| StateUpdateWithDefinitions {
-                    block_hash: BlockHash(k.hash.0),
-                    state_update: v.0,
-                    classes: v.1,
-                })
-                .collect()
-        }
-
-        impl_take_parsed_and_should_stop!(state_updates);
+        impl_take_parsed_and_should_stop!(all);
     }
 }
 
@@ -310,13 +270,7 @@ pub(crate) mod transactions {
         Delimited {
             transactions: InnerTransactions,
         },
-        DelimitedWithError {
-            error: Error,
-            transactions: InnerTransactions,
-        },
-        Empty {
-            error: Option<Error>,
-        },
+        Empty,
     }
 
     #[derive(Debug)]
@@ -385,7 +339,6 @@ pub(crate) mod transactions {
 
     impl super::ParserState for State {
         type Dto = TransactionsResponse;
-        type Inner = InnerTransactions;
         type Out = ParsedTransactions;
 
         fn transition(self, next: Self::Dto) -> anyhow::Result<Self> {
@@ -485,10 +438,6 @@ pub(crate) mod transactions {
                 }
                 (_, _, _) => anyhow::bail!("unexpected response"),
             })
-        }
-
-        fn from_inner(inner: Self::Inner) -> Self::Out {
-            inner.into()
         }
 
         impl_take_parsed_and_should_stop!(transactions);

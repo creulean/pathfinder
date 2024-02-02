@@ -28,6 +28,7 @@ pub trait TryFromDto<T> {
         Self: Sized;
 }
 
+// TODO REMOVE
 /// Block header but without most of the commitments
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlockHeader {
@@ -41,6 +42,7 @@ pub struct BlockHeader {
     pub state_commitment: StateCommitment,
 }
 
+// TODO REMOVE
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaybeSignedBlockHeader {
     pub header: BlockHeader,
@@ -58,7 +60,7 @@ impl From<BlockHeader> for MaybeSignedBlockHeader {
 
 impl<T> TryFromDto<T> for pathfinder_common::BlockHeader
 where
-    T: AsRef<p2p_proto::block::BlockHeader>,
+    T: AsRef<p2p_proto::header::SignedBlockHeader>,
 {
     fn try_from_dto(dto: T) -> anyhow::Result<Self> {
         let dto = dto.as_ref();
@@ -89,34 +91,37 @@ where
     }
 }
 
-/// Simple state update meant for the temporary p2p client hidden behind
-/// the gateway client api, ie.:
-/// - does not contain any commitments
-/// - does not specify if the class was declared or replaced
-///
-/// TODO: remove this once proper p2p friendly sync is implemented
-#[derive(Debug, Clone, PartialEq)]
-pub struct StateUpdate {
-    pub contract_updates: HashMap<ContractAddress, ContractUpdate>,
-    pub system_contract_updates: HashMap<ContractAddress, SystemContractUpdate>,
-}
+// TODO REMOVE
+// /// Simple state update meant for the temporary p2p client hidden behind
+// /// the gateway client api, ie.:
+// /// - does not contain any commitments
+// /// - does not specify if the class was declared or replaced
+// ///
+// /// TODO: remove this once proper p2p friendly sync is implemented
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct StateUpdate {
+//     pub contract_updates: HashMap<ContractAddress, ContractUpdate>,
+//     pub system_contract_updates: HashMap<ContractAddress, SystemContractUpdate>,
+// }
 
-/// Simple state update with class definitions whose hashes have not been computed and compared against the state update yet.
-#[derive(Debug, Clone, PartialEq)]
-pub struct StateUpdateWithDefinitions {
-    pub block_hash: BlockHash,
-    pub state_update: StateUpdate,
-    pub classes: Vec<p2p_proto::state::Class>,
-}
+// TODO REMOVE
+// /// Simple state update with class definitions whose hashes have not been computed and compared against the state update yet.
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct StateUpdateWithDefinitions {
+//     pub block_hash: BlockHash,
+//     pub state_update: StateUpdate,
+//     pub classes: Vec<p2p_proto::state::Class>,
+// }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ContractUpdate {
-    pub storage: HashMap<StorageAddress, StorageValue>,
-    /// The class associated with this update as the result of either a deploy or class replacement transaction.
-    /// We don't explicitly know if it's one or the other
-    pub class: Option<ClassHash>,
-    pub nonce: Option<ContractNonce>,
-}
+// TODO REMOVE
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct ContractUpdate {
+//     pub storage: HashMap<StorageAddress, StorageValue>,
+//     /// The class associated with this update as the result of either a deploy or class replacement transaction.
+//     /// We don't explicitly know if it's one or the other
+//     pub class: Option<ClassHash>,
+//     pub nonce: Option<ContractNonce>,
+// }
 
 /// Deployed contract address has not been computed for deploy account transactions.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -173,111 +178,111 @@ pub struct RawDeployAccountTransactionV3 {
     pub class_hash: ClassHash,
 }
 
-impl From<pathfinder_common::BlockHeader> for BlockHeader {
-    fn from(value: pathfinder_common::BlockHeader) -> Self {
-        Self {
-            hash: value.hash,
-            parent_hash: value.parent_hash,
-            number: value.number,
-            timestamp: value.timestamp,
-            eth_l1_gas_price: value.eth_l1_gas_price,
-            sequencer_address: value.sequencer_address,
-            starknet_version: value.starknet_version,
-            state_commitment: value.state_commitment,
-        }
-    }
-}
+// impl From<pathfinder_common::BlockHeader> for BlockHeader {
+//     fn from(value: pathfinder_common::BlockHeader) -> Self {
+//         Self {
+//             hash: value.hash,
+//             parent_hash: value.parent_hash,
+//             number: value.number,
+//             timestamp: value.timestamp,
+//             eth_l1_gas_price: value.eth_l1_gas_price,
+//             sequencer_address: value.sequencer_address,
+//             starknet_version: value.starknet_version,
+//             state_commitment: value.state_commitment,
+//         }
+//     }
+// }
 
-impl TryFrom<p2p_proto::block::BlockHeader> for BlockHeader {
-    type Error = anyhow::Error;
+// impl TryFrom<p2p_proto::block::BlockHeader> for BlockHeader {
+//     type Error = anyhow::Error;
 
-    fn try_from(dto: p2p_proto::block::BlockHeader) -> anyhow::Result<Self> {
-        Ok(Self {
-            hash: BlockHash(dto.hash.0),
-            parent_hash: BlockHash(dto.parent_hash.0),
-            number: BlockNumber::new(dto.number)
-                .ok_or(anyhow::anyhow!("Invalid block number > i64::MAX"))?,
-            timestamp: BlockTimestamp::new(
-                dto.time.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
-            )
-            .ok_or(anyhow::anyhow!("Invalid block timestamp"))?,
-            sequencer_address: SequencerAddress(dto.sequencer_address.0),
-            // TODO imo missing in the spec
-            eth_l1_gas_price: GasPrice::from_be_slice(dto.gas_price.as_slice())?,
-            // TODO not sure if should be in the spec
-            starknet_version: StarknetVersion::from(dto.starknet_version),
-            // TODO remove this field when signature verification is done
-            // allows to verify block hash and state commitment when present
-            state_commitment: StateCommitment(dto.state_commitment.unwrap_or_default().0),
-        })
-    }
-}
+//     fn try_from(dto: p2p_proto::block::BlockHeader) -> anyhow::Result<Self> {
+//         Ok(Self {
+//             hash: BlockHash(dto.hash.0),
+//             parent_hash: BlockHash(dto.parent_hash.0),
+//             number: BlockNumber::new(dto.number)
+//                 .ok_or(anyhow::anyhow!("Invalid block number > i64::MAX"))?,
+//             timestamp: BlockTimestamp::new(
+//                 dto.time.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+//             )
+//             .ok_or(anyhow::anyhow!("Invalid block timestamp"))?,
+//             sequencer_address: SequencerAddress(dto.sequencer_address.0),
+//             // TODO imo missing in the spec
+//             eth_l1_gas_price: GasPrice::from_be_slice(dto.gas_price.as_slice())?,
+//             // TODO not sure if should be in the spec
+//             starknet_version: StarknetVersion::from(dto.starknet_version),
+//             // TODO remove this field when signature verification is done
+//             // allows to verify block hash and state commitment when present
+//             state_commitment: StateCommitment(dto.state_commitment.unwrap_or_default().0),
+//         })
+//     }
+// }
 
-impl From<pathfinder_common::StateUpdate> for StateUpdate {
-    fn from(s: pathfinder_common::StateUpdate) -> Self {
-        Self {
-            contract_updates: s
-                .contract_updates
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            system_contract_updates: s.system_contract_updates,
-        }
-    }
-}
+// impl From<pathfinder_common::StateUpdate> for StateUpdate {
+//     fn from(s: pathfinder_common::StateUpdate) -> Self {
+//         Self {
+//             contract_updates: s
+//                 .contract_updates
+//                 .into_iter()
+//                 .map(|(k, v)| (k, v.into()))
+//                 .collect(),
+//             system_contract_updates: s.system_contract_updates,
+//         }
+//     }
+// }
 
-impl From<pathfinder_common::state_update::ContractUpdate> for ContractUpdate {
-    fn from(c: pathfinder_common::state_update::ContractUpdate) -> Self {
-        Self {
-            storage: c.storage,
-            class: c.class.map(|x| x.class_hash()),
-            nonce: c.nonce,
-        }
-    }
-}
+// impl From<pathfinder_common::state_update::ContractUpdate> for ContractUpdate {
+//     fn from(c: pathfinder_common::state_update::ContractUpdate) -> Self {
+//         Self {
+//             storage: c.storage,
+//             class: c.class.map(|x| x.class_hash()),
+//             nonce: c.nonce,
+//         }
+//     }
+// }
 
-impl From<p2p_proto::state::StateDiff> for StateUpdate {
-    fn from(proto: p2p_proto::state::StateDiff) -> Self {
-        const SYSTEM_CONTRACT: ContractAddress = ContractAddress::ONE;
-        let mut system_contract_update = SystemContractUpdate {
-            storage: Default::default(),
-        };
-        let mut contract_updates = HashMap::new();
-        proto.contract_diffs.into_iter().for_each(|diff| {
-            if diff.address.0 == SYSTEM_CONTRACT.0 {
-                diff.values.into_iter().for_each(|x| {
-                    system_contract_update
-                        .storage
-                        .insert(StorageAddress(x.key), StorageValue(x.value));
-                });
-            } else {
-                contract_updates.insert(
-                    ContractAddress(diff.address.0),
-                    ContractUpdate {
-                        storage: diff
-                            .values
-                            .into_iter()
-                            .map(|x| (StorageAddress(x.key), StorageValue(x.value)))
-                            .collect(),
-                        class: diff.class_hash.map(ClassHash),
-                        nonce: diff.nonce.map(ContractNonce),
-                    },
-                );
-            }
-        });
+// impl From<p2p_proto::state::StateDiff> for StateUpdate {
+//     fn from(proto: p2p_proto::state::StateDiff) -> Self {
+//         const SYSTEM_CONTRACT: ContractAddress = ContractAddress::ONE;
+//         let mut system_contract_update = SystemContractUpdate {
+//             storage: Default::default(),
+//         };
+//         let mut contract_updates = HashMap::new();
+//         proto.contract_diffs.into_iter().for_each(|diff| {
+//             if diff.address.0 == SYSTEM_CONTRACT.0 {
+//                 diff.values.into_iter().for_each(|x| {
+//                     system_contract_update
+//                         .storage
+//                         .insert(StorageAddress(x.key), StorageValue(x.value));
+//                 });
+//             } else {
+//                 contract_updates.insert(
+//                     ContractAddress(diff.address.0),
+//                     ContractUpdate {
+//                         storage: diff
+//                             .values
+//                             .into_iter()
+//                             .map(|x| (StorageAddress(x.key), StorageValue(x.value)))
+//                             .collect(),
+//                         class: diff.class_hash.map(ClassHash),
+//                         nonce: diff.nonce.map(ContractNonce),
+//                     },
+//                 );
+//             }
+//         });
 
-        let system_contract_updates = if system_contract_update.storage.is_empty() {
-            Default::default()
-        } else {
-            [(SYSTEM_CONTRACT, system_contract_update)].into()
-        };
+//         let system_contract_updates = if system_contract_update.storage.is_empty() {
+//             Default::default()
+//         } else {
+//             [(SYSTEM_CONTRACT, system_contract_update)].into()
+//         };
 
-        Self {
-            contract_updates,
-            system_contract_updates,
-        }
-    }
-}
+//         Self {
+//             contract_updates,
+//             system_contract_updates,
+//         }
+//     }
+// }
 
 impl NonDeployAccountTransaction {
     pub fn into_variant(self) -> TransactionVariant {
