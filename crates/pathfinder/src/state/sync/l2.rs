@@ -114,6 +114,18 @@ where
             None => (BlockNumber::GENESIS, None),
         };
 
+        // We start downloading the signature for the block
+        let signature_handle = tokio::spawn({
+            let sequencer = sequencer.clone();
+            async move {
+                let t_signature = std::time::Instant::now();
+                let result = sequencer.signature(next.into()).await;
+                let t_signature = t_signature.elapsed();
+
+                (result, t_signature)
+            }
+        });
+
         let t_block = std::time::Instant::now();
 
         let (block, commitments, state_update) = loop {
@@ -225,12 +237,30 @@ where
         .with_context(|| format!("Handling newly declared classes for block {next:?}"))?;
         let t_declare = t_declare.elapsed();
 
-        let t_signature = std::time::Instant::now();
-        let signature = sequencer
-            .signature(block.block_hash.into())
-            .await
-            .with_context(|| format!("Fetch signature for block {next:?} from sequencer"))?;
-        let t_signature = t_signature.elapsed();
+        // Download signature
+        let (signature_result, t_signature) =
+            signature_handle.await.context("Joining signature task")?;
+        let (signature, t_signature) = match signature_result {
+            Ok(signature) => (signature, t_signature),
+            Err(SequencerError::StarknetError(err))
+                if err.code
+                    == starknet_gateway_types::error::KnownStarknetErrorCode::BlockNotFound
+                        .into() =>
+            {
+                // There is a race condition here: if the query for the signature was made _before_ the block was
+                // published -- but by the time we actually queryied for the block it was there. In this case
+                // we just retry the signature download.
+                let t_signature = std::time::Instant::now();
+                let signature = sequencer.signature(next.into()).await.with_context(|| {
+                    format!("Fetch signature for block {next:?} from sequencer")
+                })?;
+                (signature, t_signature.elapsed())
+            }
+            Err(err) => {
+                return Err(err)
+                    .context(format!("Fetch signature for block {next:?} from sequencer"))
+            }
+        };
 
         // An extra sanity check for the signature API.
         anyhow::ensure!(
